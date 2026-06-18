@@ -1,0 +1,999 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Мероприятие: {{ event.name }}</h2>
+
+<!-- Statistics and Export Section -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; color: white; flex-wrap: wrap; gap: 15px;">
+    <div style="display: flex; gap: 30px; align-items: center; flex-wrap: wrap;">
+        <div style="text-align: center;">
+            <div style="font-size: 28px; font-weight: bold;" id="totalGuests">0</div>
+            <div style="font-size: 14px;">Всего участников</div>
+        </div>
+        <div style="text-align: center;">
+            <div style="font-size: 28px; font-weight: bold; color: #2ecc71;" id="checkedInGuests">0</div>
+            <div style="font-size: 14px;">Зарегались</div>
+        </div>
+        <div style="text-align: center;">
+            <div style="font-size: 28px; font-weight: bold; color: #e74c3c;" id="notCheckedInGuests">0</div>
+            <div style="font-size: 14px;">НЕ зарегались</div>
+        </div>
+        <div style="text-align: center;">
+            <div style="font-size: 28px; font-weight: bold;" id="checkinPercentage">0%</div>
+            <div style="font-size: 14px;">Ход регистрации</div>
+        </div>
+    </div>
+    <div style="display: flex; gap: 10px;">
+        <button onclick="openFilterModal()" class="btn" style="background: #f39c12; font-size: 16px; padding: 12px 24px; white-space: nowrap;">
+            🔍 Фильтры
+        </button>
+        <a href="{{ url_for('export_event_stats', event_id=event.id) }}" class="btn" style="background: #27ae60; font-size: 16px; padding: 12px 24px; white-space: nowrap;">
+            📊 Экспорт статистики
+        </a>
+    </div>
+</div>
+
+<!-- Active Filters Display -->
+<div id="activeFilters" style="display: none; margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px; border: 1px solid #dee2e6;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <strong>Активные фильтры:</strong>
+        <button onclick="clearAllFilters()" class="btn btn-small" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">Очистить фильтры</button>
+    </div>
+    <div id="activeFiltersList" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px;"></div>
+</div>
+
+<!-- Filter Modal -->
+<div id="filterModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 10px; padding: 30px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0;">Отфильтровать список гостей</h3>
+            <button onclick="closeFilterModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+        </div>
+        
+        <!-- Search filter -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Быстрый поиск:</label>
+            <input type="text" id="quickSearch" placeholder="Поиск по всем полям..." 
+                   style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;"
+                   oninput="applyQuickSearch()">
+        </div>
+        
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+        
+        <!-- Column-specific filters -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 10px; font-weight: bold;">Фильтровать по столбцу:</label>
+            <div id="columnFilters">
+                <!-- Dynamic column filters will be added here -->
+            </div>
+        </div>
+        
+        <!-- Check-in status filter -->
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 10px; font-weight: bold;">Статус регистрации:</label>
+            <select id="statusFilter" onchange="applyFilters()" 
+                    style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                <option value="all">ВСЕ</option>
+                <option value="checked_in">Зареган</option>
+                <option value="not_checked_in">Не зареган</option>
+            </select>
+        </div>
+        
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button onclick="clearAllFilters()" class="btn" style="background: #6c757d;">Очистить все фильтры</button>
+            <button onclick="applyFiltersAndClose()" class="btn" style="background: #28a745;">Применить фильтры</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Guest Modal -->
+<div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1001; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 10px; padding: 30px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0;">Изменить данные гостя</h3>
+            <button onclick="closeEditModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+        </div>
+        
+        <form id="editGuestForm" onsubmit="saveGuestEdit(event)">
+            <input type="hidden" id="editGuestId">
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Фамилия:</label>
+                <input type="text" id="editSurname" required 
+                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Имя:</label>
+                <input type="text" id="editName" required 
+                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+            </div>
+            
+            <div id="editSecondNameField" style="margin-bottom: 15px; display: none;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Отчество:</label>
+                <input type="text" id="editSecondName" 
+                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+            </div>
+            
+            <div id="editAdditionalFields" style="margin-bottom: 15px;">
+                <!-- Dynamic additional fields will be added here -->
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button type="button" onclick="closeEditModal()" class="btn" style="background: #6c757d;">Отмена</button>
+                <button type="submit" class="btn" style="background: #28a745;">Применить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div style="margin: 20px 0;">
+    <h3>Поиск по фамилии</h3>
+    
+    <!-- Letter Buttons -->
+    <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 20px;">
+        <button class="btn letter-btn active" onclick="searchByLetter('ALL')" style="background: #28a745;">
+            ВСЕ
+        </button>
+        {% for letter in letters %}
+        <button class="btn letter-btn" onclick="searchByLetter('{{ letter }}')">{{ letter }}</button>
+        {% endfor %}
+    </div>
+    
+    <!-- Two-Letter Combinations -->
+    <div id="twoLetterButtons" style="display: none; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;">
+        <h4 style="width: 100%;">Подробный поиск:</h4>
+        <div id="twoLetterContainer" style="display: flex; flex-wrap: wrap; gap: 5px;"></div>
+    </div>
+    
+    <!-- Search Results -->
+    <div id="results" style="margin-top: 20px;">
+        <div style="text-align: center; padding: 40px; color: #666;">
+            <p>Загружаю список...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentEventId = {{ event.id }};
+let currentColumns = [];
+let currentGuests = [];
+let filteredGuests = [];
+let currentSearchTerm = 'ALL';
+let allGuests = [];
+let activeFilters = {};
+let quickSearchTerm = '';
+
+function searchByLetter(letter) {
+    currentSearchTerm = letter;
+    
+    document.querySelectorAll('.letter-btn').forEach(btn => {
+        btn.style.background = '#667eea';
+        btn.classList.remove('active');
+    });
+    
+    const buttons = document.querySelectorAll('.letter-btn');
+    buttons.forEach(btn => {
+        if (btn.textContent.trim() === letter) {
+            btn.style.background = '#764ba2';
+            btn.classList.add('active');
+        }
+    });
+    
+    if (letter === 'ALL') {
+        document.getElementById('twoLetterButtons').style.display = 'none';
+        fetchGuests(letter);
+    } else if (letter.length === 1) {
+        fetchAllGuestsForCombinations(letter);
+    } else {
+        document.getElementById('twoLetterButtons').style.display = 'none';
+        fetchGuests(letter);
+    }
+}
+
+function fetchAllGuestsForCombinations(firstLetter) {
+    const url = `/api/search_guests/${currentEventId}?term=${encodeURIComponent(firstLetter)}`;
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            allGuests = data.guests;
+            const combinations = generateTwoLetterCombinations(firstLetter, data.guests);
+            showTwoLetterButtonsDynamic(firstLetter, combinations);
+            currentColumns = data.columns;
+            currentGuests = data.guests;
+            applyFilters();
+        })
+        .catch(error => {
+            console.error('Error fetching guests:', error);
+            document.getElementById('results').innerHTML = '<p style="color: red; text-align: center;">Не смог загрузить список. Пожалуйста, попробуйте еще раз.</p>';
+        });
+}
+
+function generateTwoLetterCombinations(firstLetter, guests) {
+    const secondChars = new Set();
+    
+    guests.forEach(guest => {
+        const surname = guest.surname || '';
+        if (surname.length >= 2) {
+            const secondChar = surname.charAt(1);
+            secondChars.add(secondChar);
+        }
+    });
+    
+    const combinations = Array.from(secondChars).sort((a, b) => {
+        return a.localeCompare(b, undefined, { sensitivity: 'base' });
+    });
+    
+    return combinations;
+}
+
+function showTwoLetterButtonsDynamic(firstLetter, combinations) {
+    const container = document.getElementById('twoLetterButtons');
+    const buttonContainer = document.getElementById('twoLetterContainer');
+    
+    container.style.display = 'block';
+    
+    if (combinations.length === 0) {
+        buttonContainer.innerHTML = '<p style="color: #666;">Невозможен подробный поиск</p>';
+        return;
+    }
+    
+    let html = '';
+    combinations.forEach(secondChar => {
+        const combination = firstLetter + secondChar;
+        const escapedCombination = combination.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        html += `
+            <button class="btn" 
+                    onclick="searchByLetter('${escapedCombination}')"
+                    style="margin: 2px; font-size: 14px; padding: 8px 12px;">
+                ${combination}
+            </button>
+        `;
+    });
+    
+    buttonContainer.innerHTML = html;
+}
+
+function fetchGuests(searchTerm) {
+    document.getElementById('results').innerHTML = '<div style="text-align: center; padding: 40px; color: #666;"><p>Загружаю список...</p></div>';
+    
+    const url = `/api/search_guests/${currentEventId}?term=${encodeURIComponent(searchTerm)}`;
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            currentColumns = data.columns;
+            currentGuests = data.guests;
+            applyFilters();
+        })
+        .catch(error => {
+            console.error('Error fetching guests:', error);
+            document.getElementById('results').innerHTML = '<p style="color: red; text-align: center;">Не получилось загрузить список. Пожалуйста, попробуйте еще раз.</p>';
+        });
+}
+
+// Edit Guest Functions
+function openEditModal(guestId) {
+    // Find guest in current guests list
+    const guest = currentGuests.find(g => g.id === guestId);
+    if (!guest) return;
+    
+    // Set guest ID
+    document.getElementById('editGuestId').value = guestId;
+    
+    // Set basic fields
+    document.getElementById('editSurname').value = guest.surname || '';
+    document.getElementById('editName').value = guest.name || '';
+    
+    // Show/hide second name field
+    const secondNameField = document.getElementById('editSecondNameField');
+    if (currentColumns.includes('second_name')) {
+        secondNameField.style.display = 'block';
+        document.getElementById('editSecondName').value = guest.second_name || '';
+    } else {
+        secondNameField.style.display = 'none';
+    }
+    
+    // Build additional fields
+    const additionalFieldsContainer = document.getElementById('editAdditionalFields');
+    let additionalHtml = '';
+    
+    const additionalCols = currentColumns.filter(col => !['name', 'surname', 'second_name'].includes(col));
+    
+    additionalCols.forEach(col => {
+        const value = guest.additional_data[col] || '';
+        const displayName = /^[a-zA-Z]/.test(col) ? 
+            col.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : col;
+        
+        additionalHtml += `
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">${displayName}:</label>
+                <input type="text" name="additional_${col}" data-column="${col}" value="${escapeHtml(value)}"
+                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+            </div>
+        `;
+    });
+    
+    additionalFieldsContainer.innerHTML = additionalHtml;
+    
+    // Show modal
+    document.getElementById('editModal').style.display = 'flex';
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').style.display = 'none';
+}
+
+function saveGuestEdit(event) {
+    event.preventDefault();
+    
+    const guestId = document.getElementById('editGuestId').value;
+    const name = document.getElementById('editName').value.trim();
+    const surname = document.getElementById('editSurname').value.trim();
+    const secondName = document.getElementById('editSecondName')?.value.trim() || '';
+    
+    if (!name || !surname) {
+        alert('Фамилия и Имя обязательны для заполнения');
+        return;
+    }
+    
+    // Collect additional data
+    const additionalData = {};
+    document.querySelectorAll('#editAdditionalFields input').forEach(input => {
+        const column = input.dataset.column;
+        additionalData[column] = input.value.trim();
+    });
+    
+    // Prepare data for API
+    const updateData = {
+        name: name,
+        surname: surname,
+        second_name: secondName,
+        additional_data: additionalData
+    };
+    
+    // Disable submit button
+    const submitBtn = document.querySelector('#editGuestForm button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Сохраняю...';
+    
+    // Send update to server
+    fetch(`/api/update_guest/${guestId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update guest in all arrays
+            updateGuestInArrays(data.guest);
+            
+            // Close modal
+            closeEditModal();
+            
+            // Refresh the display
+            applyFilters();
+            
+            // Show success message
+            showToast('Данные гостя успещно обновлены!', 'success');
+        } else {
+            alert('Ошибка: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Не удалось сохранить. Пожалуйста, попробуйте еще раз.');
+    })
+    .finally(() => {
+        // Re-enable submit button
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Сохранить изменения';
+    });
+}
+
+function updateGuestInArrays(updatedGuest) {
+    // Update in currentGuests
+    const currentIndex = currentGuests.findIndex(g => g.id === updatedGuest.id);
+    if (currentIndex !== -1) {
+        currentGuests[currentIndex] = {...currentGuests[currentIndex], ...updatedGuest};
+    }
+    
+    // Update in filteredGuests
+    const filteredIndex = filteredGuests.findIndex(g => g.id === updatedGuest.id);
+    if (filteredIndex !== -1) {
+        filteredGuests[filteredIndex] = {...filteredGuests[filteredIndex], ...updatedGuest};
+    }
+    
+    // Update in allGuests
+    if (allGuests.length > 0) {
+        const allIndex = allGuests.findIndex(g => g.id === updatedGuest.id);
+        if (allIndex !== -1) {
+            allGuests[allIndex] = {...allGuests[allIndex], ...updatedGuest};
+        }
+    }
+}
+
+// Toast notification
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 25px;
+        background: ${type === 'success' ? '#28a745' : '#dc3545'};
+        color: white;
+        border-radius: 5px;
+        z-index: 10000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        animation: slideInRight 0.3s ease-out;
+        font-weight: 500;
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideOutRight 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Add toast animations
+const toastStyle = document.createElement('style');
+toastStyle.textContent = `
+    @keyframes slideInRight {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOutRight {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+`;
+document.head.appendChild(toastStyle);
+
+// Filter functions
+function openFilterModal() {
+    document.getElementById('filterModal').style.display = 'flex';
+    buildColumnFilters();
+    
+    document.getElementById('statusFilter').value = activeFilters.status || 'all';
+    document.getElementById('quickSearch').value = quickSearchTerm;
+}
+
+function closeFilterModal() {
+    document.getElementById('filterModal').style.display = 'none';
+}
+
+function buildColumnFilters() {
+    const container = document.getElementById('columnFilters');
+    let html = '';
+    
+    currentColumns.forEach(column => {
+        if (['name', 'surname', 'second_name'].includes(column)) {
+            return;
+        }
+        
+        const uniqueValues = new Set();
+        currentGuests.forEach(guest => {
+            let value = guest.additional_data[column] || '';
+            if (value) {
+                uniqueValues.add(value);
+            }
+        });
+        
+        if (uniqueValues.size > 0) {
+            const sortedValues = Array.from(uniqueValues).sort((a, b) => {
+                return a.localeCompare(b, undefined, { sensitivity: 'base' });
+            });
+            
+            const displayName = /^[a-zA-Z]/.test(column) ? 
+                column.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : column;
+            
+            html += `
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">
+                        ${displayName}:
+                    </label>
+                    <select class="column-filter" data-column="${column}" onchange="updateColumnFilter(this)" 
+                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                        <option value="">All</option>
+                        ${sortedValues.map(val => `<option value="${escapeHtml(val)}" ${activeFilters[column] === val ? 'selected' : ''}>${val}</option>`).join('')}
+                    </select>
+                </div>
+            `;
+        }
+    });
+    
+    if (html === '') {
+        html = '<p style="color: #666;">Нет дополнительных столбцов для фильтрации.</p>';
+    }
+    
+    container.innerHTML = html;
+}
+
+function updateColumnFilter(selectElement) {
+    const column = selectElement.dataset.column;
+    const value = selectElement.value;
+    
+    if (value) {
+        activeFilters[column] = value;
+    } else {
+        delete activeFilters[column];
+    }
+    
+    updateActiveFiltersDisplay();
+}
+
+function applyQuickSearch() {
+    quickSearchTerm = document.getElementById('quickSearch').value.toLowerCase();
+    applyFilters();
+}
+
+function applyFilters() {
+    filteredGuests = [...currentGuests];
+    
+    if (quickSearchTerm) {
+        filteredGuests = filteredGuests.filter(guest => {
+            const searchableText = [
+                guest.name,
+                guest.surname,
+                guest.second_name,
+                ...Object.values(guest.additional_data)
+            ].join(' ').toLowerCase();
+            
+            return searchableText.includes(quickSearchTerm);
+        });
+    }
+    
+    Object.entries(activeFilters).forEach(([column, value]) => {
+        if (column === 'status') return;
+        
+        filteredGuests = filteredGuests.filter(guest => {
+            const guestValue = guest.additional_data[column] || '';
+            return guestValue === value;
+        });
+    });
+    
+    if (activeFilters.status === 'checked_in') {
+        filteredGuests = filteredGuests.filter(guest => guest.checked_in);
+    } else if (activeFilters.status === 'not_checked_in') {
+        filteredGuests = filteredGuests.filter(guest => !guest.checked_in);
+    }
+    
+    updateActiveFiltersDisplay();
+    displayResults(filteredGuests, currentColumns);
+}
+
+function applyFiltersAndClose() {
+    const statusValue = document.getElementById('statusFilter').value;
+    if (statusValue && statusValue !== 'all') {
+        activeFilters.status = statusValue;
+    } else {
+        delete activeFilters.status;
+    }
+    
+    quickSearchTerm = document.getElementById('quickSearch').value.toLowerCase();
+    
+    applyFilters();
+    closeFilterModal();
+}
+
+function clearAllFilters() {
+    activeFilters = {};
+    quickSearchTerm = '';
+    document.getElementById('quickSearch').value = '';
+    document.getElementById('statusFilter').value = 'all';
+    
+    document.querySelectorAll('.column-filter').forEach(select => {
+        select.value = '';
+    });
+    
+    filteredGuests = [...currentGuests];
+    updateActiveFiltersDisplay();
+    displayResults(filteredGuests, currentColumns);
+}
+
+function updateActiveFiltersDisplay() {
+    const container = document.getElementById('activeFilters');
+    const listContainer = document.getElementById('activeFiltersList');
+    
+    const allFilters = {...activeFilters};
+    if (quickSearchTerm) {
+        allFilters['Search'] = quickSearchTerm;
+    }
+    
+    const filterKeys = Object.keys(allFilters);
+    
+    if (filterKeys.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    container.style.display = 'block';
+    
+    let html = '';
+    filterKeys.forEach(key => {
+        const value = allFilters[key];
+        const displayKey = key === 'Search' ? 'Search' : 
+            (/^[a-zA-Z]/.test(key) ? key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : key);
+        const displayValue = key === 'status' ? (value === 'checked_in' ? 'Зареган' : 'Не зареган') : value;
+        
+        html += `
+            <span style="background: #667eea; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px;">
+                ${displayKey}: ${displayValue}
+                <button onclick="removeFilter('${key}')" style="background: none; border: none; color: white; cursor: pointer; font-size: 16px; padding: 0; line-height: 1;">&times;</button>
+            </span>
+        `;
+    });
+    
+    listContainer.innerHTML = html;
+}
+
+function removeFilter(key) {
+    if (key === 'Search') {
+        quickSearchTerm = '';
+        document.getElementById('quickSearch').value = '';
+    } else {
+        delete activeFilters[key];
+    }
+    
+    applyFilters();
+    
+    if (document.getElementById('filterModal').style.display === 'flex') {
+        if (key === 'status') {
+            document.getElementById('statusFilter').value = 'all';
+        } else if (key !== 'Search') {
+            const select = document.querySelector(`.column-filter[data-column="${key}"]`);
+            if (select) select.value = '';
+        }
+    }
+}
+
+function updateStatsDisplay(total, checkedIn) {
+    const notCheckedIn = total - checkedIn;
+    const percentage = total > 0 ? Math.round((checkedIn / total) * 100) : 0;
+    
+    document.getElementById('totalGuests').textContent = total;
+    document.getElementById('checkedInGuests').textContent = checkedIn;
+    document.getElementById('notCheckedInGuests').textContent = notCheckedIn;
+    document.getElementById('checkinPercentage').textContent = percentage + '%';
+    
+    const percentageElement = document.getElementById('checkinPercentage');
+    if (percentage >= 80) {
+        percentageElement.style.color = '#2ecc71';
+    } else if (percentage >= 50) {
+        percentageElement.style.color = '#f39c12';
+    } else {
+        percentageElement.style.color = '#e74c3c';
+    }
+}
+
+function displayResults(guests, columns) {
+    const resultsDiv = document.getElementById('results');
+    
+    const checkedInCount = guests.filter(g => g.checked_in).length;
+    updateStatsDisplay(guests.length, checkedInCount);
+    
+    if (guests.length === 0) {
+        resultsDiv.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">Поиск не дал результата.</p>';
+        return;
+    }
+    
+    let html = `
+        <div style="overflow-x: auto;">
+            <table id="guestTable">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Фамилия</th>
+                        <th>Имя</th>
+                        ${columns.includes('second_name') ? '<th>Отчество</th>' : ''}
+                        ${columns.filter(col => !['name', 'surname', 'second_name'].includes(col))
+                            .map(col => {
+                                let displayName = col;
+                                if (/^[a-zA-Z]/.test(col)) {
+                                    displayName = col.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                                }
+                                return `<th>${displayName}</th>`;
+                            }).join('')}
+                        <th>Status</th>
+                        <th style="min-width: 160px;">Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    guests.forEach((guest, index) => {
+        const checkedInClass = guest.checked_in ? 'checked-in' : 'not-checked-in';
+        const rowClass = guest.checked_in ? 'row-checked-in' : '';
+        
+        let statusHtml = guest.checked_in ? '✓ Зареган' : 'Не зареган';
+        if (guest.checked_in && guest.checked_in_at) {
+            const checkinTime = new Date(guest.checked_in_at).toLocaleString();
+            statusHtml += `<br><small style="font-size: 11px;">${checkinTime}</small>`;
+        }
+        
+        html += `
+            <tr id="guest-row-${guest.id}" class="${rowClass}">
+                <td>${index + 1}</td>
+                <td>${escapeHtml(guest.surname)}</td>
+                <td>${escapeHtml(guest.name)}</td>
+                ${columns.includes('second_name') ? `<td>${escapeHtml(guest.second_name || '-')}</td>` : ''}
+                ${columns.filter(col => !['name', 'surname', 'second_name'].includes(col))
+                    .map(col => `<td>${escapeHtml(guest.additional_data[col] || '-')}</td>`).join('')}
+                <td class="${checkedInClass}" id="status-cell-${guest.id}">
+                    ${statusHtml}
+                </td>
+                <td>
+                    <div style="display: flex; gap: 5px;">
+                        <button class="btn btn-small ${guest.checked_in ? 'btn-uncheck' : 'btn-checkin'}" 
+                                onclick="toggleCheckIn(${guest.id}, ${!guest.checked_in})"
+                                id="checkin-btn-${guest.id}">
+                            ${guest.checked_in ? 'Снять регистр' : 'Зарегать'}
+                        </button>
+                        <button class="btn btn-small btn-edit" 
+                                onclick="openEditModal(${guest.id})">
+                            ✏️ Править
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    
+    const filterInfo = Object.keys(activeFilters).length > 0 || quickSearchTerm ? 
+        '<div style="margin-top: 5px; color: #666; font-style: italic;">Результат фильтрации</div>' : '';
+    
+    html += filterInfo;
+    
+    resultsDiv.innerHTML = html;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function toggleCheckIn(guestId, checkIn) {
+    const action = checkIn ? 'check in' : 'uncheck';
+    const guest = currentGuests.find(g => g.id === guestId);
+    const guestName = guest ? `${guest.name} ${guest.surname}` : 'this guest';
+    
+    if (confirm(`Confirm ${action} for ${guestName}?`)) {
+        const button = document.getElementById(`checkin-btn-${guestId}`);
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'Processing...';
+        }
+        
+        fetch(`/api/checkin/${guestId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ check_in: checkIn })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const guestIndex = currentGuests.findIndex(g => g.id === guestId);
+                if (guestIndex !== -1) {
+                    currentGuests[guestIndex].checked_in = checkIn;
+                    currentGuests[guestIndex].checked_in_at = data.checked_in_at;
+                }
+                
+                const filteredIndex = filteredGuests.findIndex(g => g.id === guestId);
+                if (filteredIndex !== -1) {
+                    filteredGuests[filteredIndex].checked_in = checkIn;
+                    filteredGuests[filteredIndex].checked_in_at = data.checked_in_at;
+                }
+                
+                if (allGuests.length > 0) {
+                    const allGuestIndex = allGuests.findIndex(g => g.id === guestId);
+                    if (allGuestIndex !== -1) {
+                        allGuests[allGuestIndex].checked_in = checkIn;
+                        allGuests[allGuestIndex].checked_in_at = data.checked_in_at;
+                    }
+                }
+                
+                updateGuestRow(guestId, checkIn, data.checked_in_at);
+                
+                const totalGuests = filteredGuests.length;
+                const checkedInCount = filteredGuests.filter(g => g.checked_in).length;
+                updateStatsDisplay(totalGuests, checkedInCount);
+            } else {
+                alert('Error: ' + data.message);
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = checkIn ? 'Зарегать' : 'Снять регистр';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка:', error);
+            alert('Возникла ошибка. Пожалуйста, попробуйте повторить.');
+            if (button) {
+                button.disabled = false;
+                button.textContent = checkIn ? 'Зарегать' : 'Снять регистр';
+            }
+        });
+    }
+}
+
+function updateGuestRow(guestId, checkedIn, checkedInAt) {
+    const row = document.getElementById(`guest-row-${guestId}`);
+    const button = document.getElementById(`checkin-btn-${guestId}`);
+    const statusCell = document.getElementById(`status-cell-${guestId}`);
+    
+    if (!row || !button || !statusCell) {
+        console.error('Could not find elements for guest', guestId);
+        return;
+    }
+    
+    if (checkedIn) {
+        row.classList.add('row-checked-in');
+    } else {
+        row.classList.remove('row-checked-in');
+    }
+    
+    statusCell.className = checkedIn ? 'checked-in' : 'not-checked-in';
+    
+    let statusHtml = checkedIn ? '✓ Зареган' : 'Не зареган';
+    if (checkedIn && checkedInAt) {
+        const checkinTime = new Date(checkedInAt).toLocaleString();
+        statusHtml += `<br><small style="font-size: 11px;">${checkinTime}</small>`;
+    }
+    statusCell.innerHTML = statusHtml;
+    
+    button.className = `btn btn-small ${checkedIn ? 'btn-uncheck' : 'btn-checkin'}`;
+    button.textContent = checkedIn ? 'Снять регистр' : 'Зарегать';
+    button.disabled = false;
+    button.onclick = () => toggleCheckIn(guestId, !checkedIn);
+}
+
+// Close modals when clicking outside
+window.onclick = function(event) {
+    const filterModal = document.getElementById('filterModal');
+    const editModal = document.getElementById('editModal');
+    
+    if (event.target === filterModal) {
+        closeFilterModal();
+    }
+    if (event.target === editModal) {
+        closeEditModal();
+    }
+}
+
+// Load all guests on page load
+document.addEventListener('DOMContentLoaded', function() {
+    searchByLetter('ALL');
+});
+</script>
+
+<style>
+    .row-checked-in {
+        background-color: #d4edda !important;
+    }
+    
+    .row-checked-in:hover {
+        background-color: #c3e6cb !important;
+    }
+    
+    .btn-checkin {
+        background: #28a745;
+    }
+    
+    .btn-checkin:hover {
+        background: #218838;
+    }
+    
+    .btn-uncheck {
+        background: #dc3545;
+    }
+    
+    .btn-uncheck:hover {
+        background: #c82333;
+    }
+    
+    .btn-edit {
+        background: #3498db;
+    }
+    
+    .btn-edit:hover {
+        background: #2980b9;
+    }
+    
+    .btn-small {
+        padding: 5px 10px;
+        font-size: 14px;
+    }
+    
+    .checked-in {
+        color: #155724;
+        font-weight: bold;
+    }
+    
+    .not-checked-in {
+        color: #721c24;
+    }
+    
+    .letter-btn.active {
+        background: #764ba2 !important;
+        transform: scale(1.05);
+    }
+    
+    .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    
+    th, td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    tr:hover {
+        background-color: #f5f5f5;
+    }
+    
+    .row-checked-in:hover {
+        background-color: #c3e6cb !important;
+    }
+    
+    #twoLetterButtons {
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+    
+    #filterModal > div,
+    #editModal > div {
+        animation: slideIn 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+        from {
+            transform: translateY(-50px);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+    
+    .column-filter:focus,
+    #quickSearch:focus,
+    #statusFilter:focus,
+    #editGuestForm input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+    }
+</style>
+{% endblock %}

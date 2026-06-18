@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h2>Админка</h2>
+    <a href="{{ url_for('create_event') }}" class="btn">Создать мероприятие</a>
+</div>
+
+{% if events %}
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Создано</th>
+                    <th>Гостей</th>
+                    <th>Зачекинились</th>
+                    <th>Статус</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in events %}
+                <tr style="{% if event.is_passed %}opacity: 0.6;{% endif %}">
+                    <td>{{ event.name }}</td>
+                    <td>{{ event.created_at }}</td>
+                    <td>{{ event.guest_count }}</td>
+                    <td>{{ event.checked_in_count }}/{{ event.guest_count }}</td>
+                    <td>
+                        {% if event.is_passed %}
+                            <span class="badge badge-passed">Завершено</span>
+                        {% elif event.is_active %}
+                            <span class="badge badge-active">Идёт</span>
+                        {% else %}
+                            <span class="badge badge-inactive">Неактивно</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 10px;">
+                            <a href="{{ url_for('guest_search', event_id=event.id) }}" class="btn btn-small">Смотреть</a>
+                            <a href="{{ url_for('edit_event', event_id=event.id) }}" class="btn btn-small btn-edit">Редактировать</a>
+                            <form method="POST" action="{{ url_for('toggle_event_passed', event_id=event.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-small {% if event.is_passed %}btn-reactivate{% else %}btn-passed{% endif %}">
+                                    {% if event.is_passed %}Открыть{% else %}Закрыть{% endif %}
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <div style="text-align: center; padding: 40px;">
+        <p style="color: #666; font-size: 18px;">Еще нет мероприятий.</p>
+        <a href="{{ url_for('create_event') }}" class="btn" style="margin-top: 20px;">Создайте Ваше первое мероприятие</a>
+    </div>
+{% endif %}
+
+<style>
+    .badge {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    
+    .badge-active {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .badge-passed {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .badge-inactive {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .btn-small {
+        padding: 5px 10px;
+        font-size: 14px;
+    }
+    
+    .btn-edit {
+        background: #ffc107;
+        color: #000;
+    }
+    
+    .btn-edit:hover {
+        background: #e0a800;
+    }
+    
+    .btn-passed {
+        background: #dc3545;
+    }
+    
+    .btn-passed:hover {
+        background: #c82333;
+    }
+    
+    .btn-reactivate {
+        background: #28a745;
+    }
+    
+    .btn-reactivate:hover {
+        background: #218838;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Редактировать мероприятие: {{ event.name }}</h2>
+
+<div style="margin-bottom: 30px; padding: 20px; background: #fff3cd; border-radius: 5px; border: 1px solid #ffc107;">
+    <strong>⚠️ ВНИМАНИЕ:</strong> Загрузка нового файла Excel приведет к замене текущего списка участников и сбросу статуса регистрации..
+</div>
+
+<form method="POST" enctype="multipart/form-data">
+    <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px;">Название мероприятия:</label>
+        <input type="text" name="event_name" value="{{ event.name }}" required 
+               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px;">Обновить список участников (файл Excel - опционально):</label>
+        <input type="file" name="guest_list" accept=".xlsx,.xls"
+               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+        <small style="color: #666;">
+            Формат Excel: должны быть как минимум столбцы 'Фамилия' и 'Имя'
+        </small>
+    </div>
+    
+    {% if columns %}
+    <div style="margin-bottom: 15px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+        <strong>Список столбцов в данном мероприятии:</strong>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
+            {% for column in columns %}
+            <span style="background: #667eea; color: white; padding: 5px 10px; border-radius: 15px; font-size: 14px;">
+                {{ column }}
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <div style="display: flex; gap: 10px;">
+        <button type="submit" class="btn">Обновить мероприятие</button>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn" style="background: #6c757d;">Отмена</a>
+    </div>
+</form>
+{% endblock %}

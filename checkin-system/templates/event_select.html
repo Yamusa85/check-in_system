@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Выберите мероприятие для регистрации</h2>
+
+{% if events %}
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-top: 20px;">
+        {% for event in events %}
+        <div style="padding: 20px; border: 2px solid #667eea; border-radius: 10px; text-align: center;">
+            <h3>{{ event.name }}</h3>
+            <p style="color: #666; margin: 10px 0;">Создано: {{ event.created_at[:10] }}</p>
+            <a href="{{ url_for('guest_search', event_id=event.id) }}" class="btn">Открыть список участников</a>
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <p>Нет активных мероприятий.</p>
+{% endif %}
+{% endblock %}

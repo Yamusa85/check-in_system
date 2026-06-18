@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Создать новое мероприятие</h2>
+
+<form method="POST" enctype="multipart/form-data">
+    <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px;">Название мероприятия:</label>
+        <input type="text" name="event_name" required 
+               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;"
+               placeholder="Введите название мероприятия">
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px;">Список участников (файл Excel):</label>
+        <input type="file" name="guest_list" accept=".xlsx,.xls" required
+               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+        <small style="color: #666;">
+            Файл Excel должен содержать как минимум столбцы с заголовком 'Фамилия' и 'Имя'. 
+            Дополинтельные столбцы будут добавлены в систему автоматически при наличии.
+        </small>
+    </div>
+    
+    <button type="submit" class="btn">Создать мероприятие</button>
+    <a href="{{ url_for('admin_dashboard') }}" class="btn" style="background: #6c757d;">Отмена</a>
+</form>
+
+<div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 5px;">
+    <h3>Пример Excel формата:</h3>
+    <p>Содержимое таблицы должно выглядет примерно так:</p>
+    <table style="width: auto; margin-top: 10px;">
+        <thead>
+            <tr>
+                <th>Фамилия</th>
+                <th>Имя</th>
+                <th>Отчество</th>
+                <th>Номер столика</th>
+                <th>Диетические предпочтения</th>
+                <th>Телефон</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Иванов</td>
+                <td>Иван</td>
+                <td>Иванович</td>
+                <td>5</td>
+                <td>Веган</td>
+                <td>+1234567890</td>
+            </tr>
+            <tr>
+                <td>Петрова</td>
+                <td>Анна</td>
+                <td>Сергеевна</td>
+                <td>3</td>
+                <td>-</td>
+                <td>+0987654321</td>
+            </tr>
+        </tbody>
+    </table>
+    <div style="margin-top: 15px;">
+        <strong>Обязательные столбцы:</strong> Фамилия, Имя<br>
+        <strong>Опциональный столбец:</strong> Отчество<br>
+        <strong>Дополнительные столбцы:</strong> любой дополнительный столбец будет добавлен динамически при наличии
+    </div>
+</div>
+{% endblock %}
