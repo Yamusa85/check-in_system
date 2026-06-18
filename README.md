@@ -14,13 +14,16 @@ Functionality:
 5) managers have options to export results, filter current list of guests, edit guests data on the go
 
 Requirements (linux):
-sqlite
-python3
-python3-flask
-python3-flask-login
-python3-werkzeug
-python3-pandas
-python3-openpyxl
+1) sqlite
+2) python3
+3) python3-flask
+4) python3-flask-login
+5) python3-werkzeug
+6) python3-pandas
+7) python3-openpyxl
 
 Optional:
-NGINX with LE-cert and proxying
+1) NGINX with LE-cert and proxying
+2) add app.py into systemd launch
+
+Place checkin-system in home dir or anywhere, start app.py
