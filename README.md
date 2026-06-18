@@ -1,10 +1,15 @@
 # check-in_system
 Python web check-in system for mini conventions
+Admin interface:
+<img width="2302" height="993" alt="image" src="https://github.com/user-attachments/assets/67f66ce9-3ea8-4662-9f52-eb3bc54e27e0" />
 
+Manager interface:
 <img width="2426" height="1467" alt="image" src="https://github.com/user-attachments/assets/b33c6587-a1d4-419e-9aaa-957d677e2656" />
 
 
 Simple and quite functional web system for receptionists at your mini conventions to check-in your guests.
+
+Default logopasses: admin/admin123, manager/manager123  (may be changed in app.py)
 
 Functionality:
 1) import guests list from excel file
