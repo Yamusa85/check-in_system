@@ -1,5 +1,5 @@
 # check-in_system
-Python web check-in system for mini conventions
+Python web check-in system for mini conventions  (Disclaimer: created with the help of AI agent)
 Admin interface:
 <img width="2302" height="993" alt="image" src="https://github.com/user-attachments/assets/67f66ce9-3ea8-4662-9f52-eb3bc54e27e0" />
 
@@ -8,6 +8,7 @@ Manager interface:
 
 
 Simple and quite functional web system for receptionists at your mini conventions to check-in your guests.
+May be used online or in your local network.
 
 Default logopasses: admin/admin123, manager/manager123  (may be changed in app.py)
 
@@ -31,4 +32,4 @@ Optional:
 1) NGINX with LE-cert and proxying
 2) add app.py into systemd launch
 
-Place checkin-system in home dir or anywhere, start app.py
+Place "checkin-system" folder and its contents in home dir or anywhere, start app.py
