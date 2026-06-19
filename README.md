@@ -11,6 +11,8 @@ Manager interface:
 Simple and quite functional web system for receptionists at your mini conventions to check-in your guests.
 May be used online or in your local network.
 
+Site available at http://serveraddress:5000
+
 Default logopasses: admin/admin123, manager/manager123  (may be changed in app.py)
 
 Functionality:
