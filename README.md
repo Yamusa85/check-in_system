@@ -1,6 +1,8 @@
 # check-in_system
 Python web check-in system for mini conventions  (Disclaimer: created with the help of AI agent)
 
+:warning:ATTENTION:warning: Not for online use, use in local network only! 
+
 Admin interface:
 <img width="2302" height="993" alt="image" src="https://github.com/user-attachments/assets/67f66ce9-3ea8-4662-9f52-eb3bc54e27e0" />
 
