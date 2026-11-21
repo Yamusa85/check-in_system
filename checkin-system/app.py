@@ -156,7 +156,7 @@ def load_user(user_id):
 def process_excel_file(file_path):
     try:
         # Read Excel file
-        df = pd.read_excel(file_path)
+        df = pd.read_excel(file_path, dtype=object)
         
         # Print available columns for debugging
         print(f"Excel columns found: {list(df.columns)}")
