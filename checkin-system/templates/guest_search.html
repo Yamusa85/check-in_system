@@ -168,6 +168,99 @@ let quickSearchTerm = '';
 let sortColumn = null;
 let sortDirection = 'asc'; // 'asc' or 'desc'
 
+//Coloring cells here
+// ===== Color-name -> hex mapping (mirrors CELL_COLORS in app.py) =====
+const COLOR_MAP = {
+    'red':        '#FF0000',
+    'green':      '#00B050',
+    'blue':       '#0070C0',
+    'yellow':     '#FFFF00',
+    'orange':     '#FFA500',
+    'purple':     '#800080',
+    'pink':       '#FFC0CB',
+    'cyan':       '#00FFFF',
+    'magenta':    '#FF00FF',
+    'gray':       '#808080',
+    'grey':       '#808080',
+    'black':      '#000000',
+    'white':      '#FFFFFF',
+    'brown':      '#A52A2A',
+    'lime':       '#00FF00',
+    'navy':       '#000080',
+    'teal':       '#008080',
+    'violet':     '#EE82EE',
+    'gold':       '#FFD700',
+    'silver':     '#C0C0C0',
+    // Russian
+    'красный':    '#FF0000',
+    'зеленый':    '#00B050',
+    'зелёный':    '#00B050',
+    'синий':      '#0070C0',
+    'желтый':     '#FFFF00',
+    'жёлтый':     '#FFFF00',
+    'оранжевый':  '#FFA500',
+    'фиолетовый': '#800080',
+    'розовый':    '#FFC0CB',
+    'голубой':    '#00FFFF',
+    'серый':      '#808080',
+    'черный':     '#000000',
+    'чёрный':     '#000000',
+    'белый':      '#FFFFFF',
+    'коричневый': '#A52A2A',
+    'бирюзовый':  '#008080',
+    'золотой':    '#FFD700',
+    'серебряный': '#C0C0C0'
+};
+
+// Light backgrounds -> dark text for readability
+const LIGHT_COLORS = new Set([
+    '#FFFF00', '#FFC0CB', '#00FFFF', '#FFFFFF',
+    '#C0C0C0', '#FFD700', '#00FF00', '#EE82EE'
+]);
+
+// Precompute a regex that matches any color name as a whole token.
+// We pad with (^|\s) and (\s|$|[,.;:!?()\[\]{}]) — this works for Cyrillic too,
+// because \s is Unicode-aware in JS with the `u` flag.
+const _COLOR_NAMES = Object.keys(COLOR_MAP).sort((a, b) => b.length - a.length);
+const _COLOR_REGEX = new RegExp(
+    "(?:^|[\\s,.;:!?()\\[\\]{}\"'—–-])(" +
+        _COLOR_NAMES.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') +
+    ")(?=$|[\\s,.;:!?()\\[\\]{}\"'—–-])",
+    'iu'
+);
+
+function detectColor(text) {
+    if (!text) return null;
+    const match = String(text).match(_COLOR_REGEX);
+    if (!match) return null;
+    return COLOR_MAP[match[1].toLowerCase()] || null;
+}
+
+function applyCellColors(root) {
+    // root: a DOM element to scan (table, document, etc.)
+    const cells = root.querySelectorAll('td');
+    cells.forEach(td => {
+        // Skip the status / actions columns — they have their own coloring
+        if (td.id && td.id.startsWith('status-cell-')) return;
+        if (td.querySelector('button')) return;
+
+        const color = detectColor(td.textContent);
+        if (color) {
+            td.style.backgroundColor = color;
+            td.style.color = LIGHT_COLORS.has(color) ? '#000' : '#fff';
+            td.style.fontWeight = 'bold';
+        } else {
+            // Clear any prior color (e.g. after a guest edit removed the name)
+            td.style.backgroundColor = '';
+            td.style.color = '';
+            td.style.fontWeight = '';
+        }
+    });
+}
+//Finished coloring cells block
+
+
+
 function searchByLetter(letter) {
     currentSearchTerm = letter;
     
@@ -791,6 +884,8 @@ function displayResults(guests, columns) {
     html += filterInfo;
     
     resultsDiv.innerHTML = html;
+// NEW: color-code any cells that contain a color name
+applyCellColors(resultsDiv);
 }
 
 function escapeHtml(text) {
