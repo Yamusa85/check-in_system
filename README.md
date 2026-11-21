@@ -23,13 +23,17 @@ Functionality:
 5) managers have options to export results, filter current list of guests, edit guests data on the go
 
 Requirements (linux):
-1) sqlite
+1) sqlite3
 2) python3
 3) python3-flask
 4) python3-flask-login
 5) python3-werkzeug
 6) python3-pandas
 7) python3-openpyxl
+
+>for Ubuntu install
+>>sudo apt install sqlite3<br/>
+>>sudo apt install python3 python3-flask python3-flask-login python3-werkzeug python3-pandas python3-openpyxl
 
 Optional:
 1) NGINX with LE-cert and proxying
