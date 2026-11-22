@@ -26,7 +26,6 @@ die()  { printf '\033[1;31m[x] %s\033[0m\n' "$*" >&2; exit 1; }
 command -v sudo >/dev/null 2>&1 || die "sudo is required."
 command -v apt-get >/dev/null 2>&1 || die "This script targets Debian/Ubuntu (apt)."
 
-# Capture the invoking user for the systemd unit
 RUN_USER="$(id -un)"
 RUN_GROUP="$(id -gn)"
 
@@ -75,6 +74,18 @@ else
   git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
 fi
 
+# ---------- 2a. Locate the real app root ----------
+# The repo may either keep app.py at the top level, or nest it inside a
+# subdirectory with the same name (e.g. INSTALL_DIR/checkin-system/app.py).
+if [[ -f "$INSTALL_DIR/app.py" ]]; then
+  APP_ROOT="$INSTALL_DIR"
+elif [[ -f "$INSTALL_DIR/checkin-system/app.py" ]]; then
+  APP_ROOT="$INSTALL_DIR/checkin-system"
+  log "Detected nested layout — app root is: $APP_ROOT"
+else
+  die "Could not locate app.py under '$INSTALL_DIR' or '$INSTALL_DIR/checkin-system'."
+fi
+
 # ---------- 3. Verify required files are present ----------
 REQUIRED_FILES=(
   "app.py"
@@ -89,14 +100,16 @@ REQUIRED_FILES=(
 )
 missing=()
 for f in "${REQUIRED_FILES[@]}"; do
-  [[ -f "$INSTALL_DIR/$f" ]] || missing+=("$f")
+  [[ -f "$APP_ROOT/$f" ]] || missing+=("$f")
 done
 if (( ${#missing[@]} > 0 )); then
-  die "Missing expected files in '$INSTALL_DIR': ${missing[*]}"
+  die "Missing expected files under '$APP_ROOT': ${missing[*]}"
 fi
-log "All expected application files present."
+log "All expected application files present in $APP_ROOT."
 
 # ---------- 4. Python virtualenv + pip fallbacks ----------
+# Venv lives at the top-level install dir so it is stable regardless of
+# any future layout reshuffle, and so it is not inside the git tree.
 VENV_DIR="$INSTALL_DIR/.venv"
 if [[ ! -d "$VENV_DIR" ]]; then
   log "Creating Python virtualenv at $VENV_DIR"
@@ -148,16 +161,15 @@ Wants=network-online.target
 Type=simple
 User=${RUN_USER}
 Group=${RUN_GROUP}
-WorkingDirectory=${INSTALL_DIR}
+WorkingDirectory=${APP_ROOT}
 Environment=PYTHONUNBUFFERED=1
 Environment=FLASK_HOST=${FLASK_HOST}
 Environment=FLASK_PORT=${FLASK_PORT}
 # app.py already initializes schema.sql / checkin.db itself on startup.
-ExecStart=${VENV_DIR}/bin/python ${INSTALL_DIR}/app.py
+ExecStart=${VENV_DIR}/bin/python ${APP_ROOT}/app.py
 Restart=on-failure
 RestartSec=5
 
-# Basic hardening
 NoNewPrivileges=true
 PrivateTmp=true
 
@@ -170,7 +182,6 @@ sudo systemctl daemon-reload
 sudo systemctl enable "${SERVICE_NAME}.service"
 sudo systemctl restart "${SERVICE_NAME}.service"
 
-# Give it a moment, then report status
 sleep 2
 if sudo systemctl is-active --quiet "${SERVICE_NAME}.service"; then
   log "Service is running."
@@ -183,7 +194,8 @@ cat <<EOF
 
 ✅ Installation complete.
 
-  App directory : $INSTALL_DIR
+  Install dir   : $INSTALL_DIR
+  App root      : $APP_ROOT
   Virtualenv    : $VENV_DIR
   Service unit  : $SERVICE_FILE
   Service name  : ${SERVICE_NAME}
@@ -194,9 +206,6 @@ Service management:
   sudo systemctl restart ${SERVICE_NAME}
   sudo systemctl stop ${SERVICE_NAME}
   sudo journalctl -u ${SERVICE_NAME} -f        # live logs
-
-The service starts automatically on boot (WantedBy=multi-user.target)
-and restarts on failure (Restart=on-failure).
 
 Checkin database (checkin.db) and schema.sql are initialized by app.py
 on first run — this script does not create the database.
