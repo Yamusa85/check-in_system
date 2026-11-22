@@ -7,7 +7,8 @@ Admin interface:
 <img width="2302" height="993" alt="image" src="https://github.com/user-attachments/assets/67f66ce9-3ea8-4662-9f52-eb3bc54e27e0" />
 
 Manager interface:
-<img width="2426" height="1467" alt="image" src="https://github.com/user-attachments/assets/b33c6587-a1d4-419e-9aaa-957d677e2656" />
+<img width="3767" height="1764" alt="Screenshot 2026-11-22 101836" src="https://github.com/user-attachments/assets/7b5d2845-1969-47aa-b1fe-977d2cfd3584" />
+
 
 
 Simple and quite functional web system for receptionists at your mini conventions to check-in your guests.
