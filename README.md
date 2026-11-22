@@ -40,7 +40,7 @@ for Ubuntu install
 curl -O https://raw.githubusercontent.com/Yamusa85/check-in_system/refs/heads/main/install-checkin.sh
 ```
 ```copy
-bash install-release.sh
+bash install-checkin.sh
 ```
 
 Optional:
