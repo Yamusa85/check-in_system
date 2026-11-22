@@ -107,45 +107,57 @@ if (( ${#missing[@]} > 0 )); then
 fi
 log "All expected application files present in $APP_ROOT."
 
-# ---------- 4. Python virtualenv + pip fallbacks ----------
-# Venv lives at the top-level install dir so it is stable regardless of
-# any future layout reshuffle, and so it is not inside the git tree.
+# ---------- 4. Python virtualenv + deps ----------
 VENV_DIR="$INSTALL_DIR/.venv"
-if [[ ! -d "$VENV_DIR" ]]; then
+
+# Rebuild the venv if missing or broken (broken bin/python symlink,
+# or the interpreter it points at no longer exists).
+if [[ ! -x "$VENV_DIR/bin/python" ]]; then
   log "Creating Python virtualenv at $VENV_DIR"
-  "$PYTHON_BIN" -m venv "$VENV_DIR"
+  "$PYTHON_BIN" -m venv --clear "$VENV_DIR"
 fi
 
-# shellcheck disable=SC1091
-source "$VENV_DIR/bin/activate"
-pip install --upgrade pip wheel >/dev/null
+# Sanity: the venv's python must be executable and must report a real path
+VENV_PY="$VENV_DIR/bin/python"
+[[ -x "$VENV_PY" ]] || die "Venv python missing or not executable: $VENV_PY"
 
-if (( ${#PIP_FALLBACK[@]} > 0 )); then
-  log "Installing pip fallbacks: ${PIP_FALLBACK[*]}"
-  declare -A PIP_NAMES=(
-    [flask]="Flask"
-    [flask_login]="Flask-Login"
-    [werkzeug]="Werkzeug"
-    [pandas]="pandas"
-    [openpyxl]="openpyxl"
-    [sqlite3]="pysqlite3-binary"
-  )
-  for mod in "${PIP_FALLBACK[@]}"; do
-    name="${PIP_NAMES[$mod]:-$mod}"
-    if [[ "$mod" == "sqlite3" ]]; then
-      python3 -c 'import sqlite3' 2>/dev/null || pip install "$name"
-    else
-      pip install "$name"
-    fi
-  done
+# Make sure pip exists in the venv and is the venv's own pip.
+# Use `python -m pip` (not the `pip` shim) so we can never accidentally
+# hit the system pip or ~/.local/bin/pip.
+if ! "$VENV_PY" -m pip --version >/dev/null 2>&1; then
+  log "Bootstrapping pip inside venv..."
+  "$VENV_PY" -m ensurepip --upgrade
 fi
+
+log "Upgrading pip/wheel in venv..."
+"$VENV_PY" -m pip install --upgrade pip wheel setuptools >/dev/null
+
+# Install all Python deps into the venv, regardless of what apt provided.
+# (apt may have installed system copies; venv-local copies take precedence
+# for the service and for the smoke test.)
+log "Installing Python dependencies into venv..."
+PIP_PKGS=(Flask Flask-Login Werkzeug pandas openpyxl)
+
+# If sqlite3 stdlib is missing (very rare), add a pip fallback for it.
+if ! "$VENV_PY" -c 'import sqlite3' >/dev/null 2>&1; then
+  warn "sqlite3 stdlib module not importable — adding pysqlite3-binary fallback"
+  PIP_PKGS+=(pysqlite3-binary)
+fi
+
+"$VENV_PY" -m pip install --no-input --upgrade "${PIP_PKGS[@]}"
 
 # ---------- 5. Smoke test ----------
-log "Performing import smoke test..."
-"$VENV_DIR/bin/python" - <<'PY'
+log "Performing smoke test with venv interpreter..."
+( cd "$APP_ROOT" && "$VENV_PY" -I - <<'PY'
+import os, sys
+print("interpreter:", sys.executable)
+print("cwd        :", os.getcwd())
 import flask, flask_login, werkzeug, pandas, openpyxl, sqlite3
-print("imports OK:", flask.__version__, pandas.__version__, openpyxl.__version__)
+print("flask      :", flask.__version__, "from", flask.__file__)
+print("pandas     :", pandas.__version__)
+print("openpyxl   :", openpyxl.__version__)
 PY
+) || die "Smoke test failed — see the traceback above."
 
 # ---------- 6. Install systemd service ----------
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
@@ -163,6 +175,7 @@ User=${RUN_USER}
 Group=${RUN_GROUP}
 WorkingDirectory=${APP_ROOT}
 Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONNOUSERSITE=1
 Environment=FLASK_HOST=${FLASK_HOST}
 Environment=FLASK_PORT=${FLASK_PORT}
 # app.py already initializes schema.sql / checkin.db itself on startup.
