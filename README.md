@@ -34,14 +34,13 @@ Requirements (linux):
 7) python3-openpyxl
 
 for Ubuntu install
-Fast:
->curl -O https://raw.githubusercontent.com/Yamusa85/check-in_system/refs/heads/main/install-checkin.sh<br/>
->bash install-release.sh<br/>
 
-Manual with no environment for python app:<br/>
-
->sudo apt install sqlite3<br/>
->sudo apt install python3 python3-flask python3-flask-login python3-werkzeug python3-pandas python3-openpyxl
+```copy
+curl -O https://raw.githubusercontent.com/Yamusa85/check-in_system/refs/heads/main/install-checkin.sh
+```
+```copy
+bash install-release.sh
+```
 
 Optional:
 1) NGINX with LE-cert and proxying
