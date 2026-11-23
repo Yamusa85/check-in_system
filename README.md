@@ -9,6 +9,10 @@ Admin interface:
 Manager interface:
 <img width="3767" height="1764" alt="Screenshot 2026-11-22 101836" src="https://github.com/user-attachments/assets/7b5d2845-1969-47aa-b1fe-977d2cfd3584" />
 
+Seats map page:
+<img width="1893" height="874" alt="image" src="https://github.com/user-attachments/assets/bb4b90ff-db35-4205-8f80-7bc5328d0541" />
+
+
 
 
 Simple and quite functional web system for receptionists at your mini conventions to check-in your guests.
