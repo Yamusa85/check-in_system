@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Карта рассадки · {{ event.name }}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; user-select: none; }
+  body {
+    background: linear-gradient(145deg,#f6f9fc,#e6f0f5);
+    min-height: 100vh; font-family: 'Segoe UI',Roboto,system-ui,sans-serif;
+    padding: 16px; display: flex;
+  }
+  .wrap { max-width: 3400px; width: 100%; }
+  .header {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 14px;
+  }
+  h1 { font-size: 1.4rem; color: #1a3e50; font-weight: 600; }
+  h1 small { font-weight: 400; color:#3d5f6e; font-size:0.85rem; display:block; }
+
+  .toolbar { display: flex; gap: 10px; align-items:center; flex-wrap: wrap; }
+  button {
+    border: 1px solid #b8d2e0; background:#fff; color:#1d4b5e;
+    padding: 10px 18px; border-radius: 60px; font-size:.9rem; font-weight:500;
+    cursor: pointer; box-shadow:0 4px 8px #b0c8d440; transition: all .15s;
+  }
+  button:hover { background:#e3f0f7; transform: translateY(-1px); }
+  button.primary { background:#1e4c5e; color:#fff; border-color:#1e4c5e; }
+  button.primary:hover { background:#2a6a82; }
+  .badge {
+    background:#ffffffb3; padding: 8px 16px; border-radius: 40px;
+    color:#1f4b5e; font-size:.82rem; border:1px solid #fff;
+    box-shadow:0 4px 10px #b0c8d440;
+  }
+
+  .legend { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:10px; font-size:.82rem; color:#2b5f74; }
+  .legend span { display:flex; align-items:center; gap:6px; }
+  .dot { width:14px; height:14px; border-radius:4px; border:1px solid #ffffffcc; }
+
+  .stage {
+    position: relative; background:#ebf3f7; border-radius:24px; padding:12px;
+    box-shadow: inset 0 6px 12px #c2d6e0, 0 8px 18px #b0c8d4;
+    height: 78vh; overflow: auto; border: 2px solid #fff;
+  }
+
+  .seat {
+    position: absolute; width: 56px; height: 56px; border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: .62rem; font-weight: 600; color:#0f3546; line-height: 1.1;
+    cursor: grab; border: 2px solid #ffffff;
+    box-shadow: 0 3px 0 #b0c8d4, 0 6px 10px -4px #2e4b5a40;
+    transition: transform .08s, box-shadow .12s, background .15s;
+    text-align: center; padding: 2px; touch-action: none;
+    background: #d4edda;  /* default green = free */
+  }
+  .seat:active { cursor: grabbing; transform: scale(0.97); }
+
+  .seat.taken { background: #eb3443; color:#7a1d1d; border-color:#f5c2c7; }
+
+  .seat .r-s { font-size:.6rem; opacity:.75; font-weight:500; }
+  .seat .who {
+    font-size:.52rem; font-weight:500; max-width: 52px;
+    overflow:hidden; text-overflow: ellipsis; white-space:nowrap;
+    opacity:.85;
+  }
+  .seat .unassigned { font-style: italic; opacity:.6; }
+
+  .drag-hint {
+    position: sticky; top: 4px; float: right; background:#ffffff90;
+    padding: 4px 12px; border-radius:30px; font-size:.7rem; color:#2b5f74;
+    backdrop-filter: blur(4px); border:1px solid #fff; pointer-events:none;
+    z-index: 200;
+  }
+
+  .stage::-webkit-scrollbar { width:10px; height:10px; }
+  .stage::-webkit-scrollbar-thumb { background:#8aaec2; border-radius:10px; }
+  .stage::-webkit-scrollbar-track { background:#d4e3ec; border-radius:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>
+      🪑 Карта рассадки
+      <small>{{ event.name }} · расставьте места, потом нажмите Сохранить</small>
+    </h1>
+    <div class="toolbar">
+      <div class="badge" id="status">гружу…</div>
+      <button id="refreshBtn">⟲ Загрузить из базы данных</button>
+      <button class="primary" id="saveBtn">💾 Сохранить рассадку</button>
+      <button onclick="history.back()">← Назад</button>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot" style="background:#d4edda"></span> не зареганы</span>
+    <span><span class="dot" style="background:#eb3443"></span> зареганы</span>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="drag-hint">↕️ скрол · тащите места</div>
+  </div>
+</div>
+
+<script>
+const EVENT_ID = {{ event.id }};
+const STAGE = document.getElementById('stage');
+const STATUS = document.getElementById('status');
+
+let seats = [];          // current data from server
+let dragged = null;
+let offsetX = 0, offsetY = 0;
+let dirty = false;       // unsaved position changes
+
+function setStatus(text) { STATUS.textContent = text; }
+
+async function loadSeats() {
+  setStatus('loading…');
+  const res = await fetch(`/api/event/${EVENT_ID}/seats`);
+  const data = await res.json();
+  seats = data.seats;
+  dirty = false;
+  render();
+  setStatus(`✅ загружено ${seats.length} мест`);
+}
+
+function render() {
+  STAGE.innerHTML = '<div class="drag-hint">↕️ скрол · тащите места</div>';
+
+  // If some seats have no saved position, lay them out on a grid (fallback).
+  // Preferred initial layout uses the Ряд / Место values from Excel.
+  const cellW = 60, cellH = 60, padX = 20, padY = 20;
+
+  // Determine grid extents from row/seat numbers, fallback 15x40
+  let maxRow = 15, maxSeat = 40;
+  seats.forEach(s => {
+    if (s.row && s.row > maxRow) maxRow = s.row;
+    if (s.seat && s.seat > maxSeat) maxSeat = s.seat;
+  });
+
+  seats.forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'seat' + (s.checked_in ? ' taken' : '');
+    el.dataset.guestId = s.guest_id;
+
+    const rowLabel = s.row != null ? s.row : '?';
+    const seatLabel = s.seat != null ? s.seat : '?';
+    const shortName = (s.surname || '').slice(0, 8) || '—';
+
+    el.innerHTML =
+      `<div>R${rowLabel}·S${seatLabel}</div>` +
+      `<div class="r-s">${s.checked_in ? '✓ зареган' : 'пусто'}</div>` +
+      `<div class="who">${shortName}</div>`;
+
+    // Determine position
+    let left, top;
+    if (s.left != null && s.top != null) {
+      left = s.left;
+      top  = s.top;
+    } else if (s.row != null && s.seat != null) {
+      // derive from Excel row/seat columns
+      left = padX + (s.seat - 1) * cellW;
+      top  = padY + (s.row  - 1) * cellH;
+    } else {
+      // scattered fallback (shouldn't normally happen)
+      left = padX + (Math.random() * maxSeat) * cellW;
+      top  = padY + (Math.random() * maxRow)  * cellH;
+    }
+    s.left = left; s.top = top;
+
+    el.style.left = left + 'px';
+    el.style.top  = top  + 'px';
+
+    el.addEventListener('mousedown', onDown);
+    el.addEventListener('touchstart', onDown, { passive: false });
+
+    STAGE.appendChild(el);
+  });
+
+  // Expand stage to fit
+  let maxL = 0, maxT = 0;
+  seats.forEach(s => {
+    if (s.left > maxL) maxL = s.left;
+    if (s.top  > maxT) maxT = s.top;
+  });
+  STAGE.style.minWidth  = Math.max(maxL + 100, 800) + 'px';
+  STAGE.style.minHeight = Math.max(maxT + 100, 500) + 'px';
+}
+
+function onDown(e) {
+  if (e.type === 'mousedown' && e.button !== 0) return;
+  e.preventDefault();
+
+  const el = e.currentTarget;
+  const guestId = Number(el.dataset.guestId);
+  dragged = { el, guestId };
+
+  const clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+  const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+
+  const stageRect = STAGE.getBoundingClientRect();
+  const left = parseFloat(el.style.left) || 0;
+  const top  = parseFloat(el.style.top)  || 0;
+
+  offsetX = (clientX - stageRect.left + STAGE.scrollLeft) - left;
+  offsetY = (clientY - stageRect.top  + STAGE.scrollTop)  - top;
+
+  el.style.zIndex = 1000;
+  el.style.cursor = 'grabbing';
+
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+  window.addEventListener('touchmove', onMove, { passive: false });
+  window.addEventListener('touchend', onUp);
+  window.addEventListener('touchcancel', onUp);
+}
+
+function onMove(e) {
+  if (!dragged) return;
+  e.preventDefault();
+
+  const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+  const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+
+  const stageRect = STAGE.getBoundingClientRect();
+  let newLeft = clientX - stageRect.left + STAGE.scrollLeft - offsetX;
+  let newTop  = clientY - stageRect.top  + STAGE.scrollTop  - offsetY;
+
+  const w = 56, h = 56;
+  newLeft = Math.max(4, Math.min(newLeft, STAGE.scrollWidth  - w - 4));
+  newTop  = Math.max(4, Math.min(newTop,  STAGE.scrollHeight - h - 4));
+
+  dragged.el.style.left = newLeft + 'px';
+  dragged.el.style.top  = newTop  + 'px';
+
+  // update our local record
+  const rec = seats.find(s => s.guest_id === dragged.guestId);
+  if (rec) { rec.left = newLeft; rec.top = newTop; }
+  dirty = true;
+}
+
+function onUp() {
+  if (!dragged) return;
+  dragged.el.style.zIndex = 10;
+  dragged.el.style.cursor = 'grab';
+  dragged = null;
+
+  window.removeEventListener('mousemove', onMove);
+  window.removeEventListener('mouseup', onUp);
+  window.removeEventListener('touchmove', onMove);
+  window.removeEventListener('touchend', onUp);
+  window.removeEventListener('touchcancel', onUp);
+
+  setStatus('⚠️ есть изменения - нажмите Сохранить');
+}
+
+async function savePositions() {
+  if (seats.length === 0) return;
+  setStatus('сохраняю…');
+  const payload = {
+    positions: seats.map(s => ({
+      guest_id: s.guest_id,
+      left: s.left,
+      top:  s.top,
+    })),
+  };
+  try {
+    const res = await fetch(`/api/event/${EVENT_ID}/seats/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.success) {
+      dirty = false;
+      setStatus(`✅ сохранено ${data.saved} позиций в базу`);
+    } else {
+      setStatus('❌ ошибка сохранения: ' + data.message);
+    }
+  } catch (err) {
+    setStatus('❌ ошибка сети: ' + err.message);
+  }
+}
+
+document.getElementById('saveBtn').addEventListener('click', savePositions);
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  if (dirty && !confirm('Отменить изменения и загрузить заново?')) return;
+  loadSeats();
+});
+
+// Warn on unload if dirty
+window.addEventListener('beforeunload', e => {
+  if (dirty) { e.preventDefault(); e.returnValue = ''; }
+});
+
+loadSeats();
+</script>
+</body>
+</html>
