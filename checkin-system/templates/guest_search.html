@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 
 {% block content %}
+<a href="{{ url_for('seating_map', event_id=event.id) }}"
+   style="display:inline-block;padding:8px 18px;background:#1e4c5e;color:#fff;
+          border-radius:40px;text-decoration:none;font-size:.9rem;margin-left:8px;">
+  🪑 Открыть карту рассадки
+</a>
+
 <h2>Мероприятие: {{ event.name }}</h2>
 
 <!-- Statistics and Export Section -->
