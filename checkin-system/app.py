@@ -101,7 +101,21 @@ def migrate_database():
                         (json.dumps(additional_data), guest['id'])
                     )
             print(f"Migrated {len(old_guests)} old guest records")
-    
+        # --- NEW: seat position columns for the seating map ---
+    if 'seat_left' not in guest_column_names:
+        try:
+            cursor.execute('ALTER TABLE guests ADD COLUMN seat_left REAL')
+            print("Added seat_left column to guests table")
+        except sqlite3.OperationalError as e:
+            print(f"Error adding seat_left: {e}")
+
+    if 'seat_top' not in guest_column_names:
+        try:
+            cursor.execute('ALTER TABLE guests ADD COLUMN seat_top REAL')
+            print("Added seat_top column to guests table")
+        except sqlite3.OperationalError as e:
+            print(f"Error adding seat_top: {e}")
+
     db.commit()
     db.close()
     print("Database migration completed")
@@ -1110,7 +1124,116 @@ def update_guest(guest_id):
     finally:
         db.close()
 
+# ============ SEATING MAP ============
 
+@app.route('/manager/event/<int:event_id>/seating')
+@login_required
+def seating_map(event_id):
+    if current_user.role not in ['manager', 'admin']:
+        flash('Access denied', 'error')
+        return redirect(url_for('index'))
+
+    db = get_db()
+    event = db.execute('SELECT * FROM events WHERE id = ?', (event_id,)).fetchone()
+    if not event:
+        flash('Event not found', 'error')
+        return redirect(url_for('manager_dashboard'))
+    db.close()
+    return render_template('seating_map.html', event=event)
+
+
+@app.route('/api/event/<int:event_id>/seats')
+@login_required
+def api_get_seats(event_id):
+    """Return every guest with their assigned row/seat + position + checkin status."""
+    if current_user.role not in ['manager', 'admin']:
+        return jsonify({'error': 'Access denied'}), 403
+
+    db = get_db()
+    guests = db.execute(
+        '''SELECT id, name, surname, second_name, additional_data,
+                  checked_in, seat_left, seat_top
+           FROM guests
+           WHERE event_id = ?
+           ORDER BY id''',
+        (event_id,)
+    ).fetchall()
+    db.close()
+
+    seats = []
+    for g in guests:
+        additional = {}
+        if g['additional_data']:
+            try:
+                additional = json.loads(g['additional_data'])
+            except Exception:
+                pass
+
+        # Pull Ряд / Место out of the additional_data JSON.
+        # Your importer stores every non-core column there, keys keep the
+        # original Excel header spelling.
+        row_val = additional.get('Ряд') or additional.get('ряд') or additional.get('Row')
+        seat_val = additional.get('Место') or additional.get('место') or additional.get('Seat')
+
+        try:
+            row_num = int(float(str(row_val))) if row_val not in (None, '') else None
+        except (ValueError, TypeError):
+            row_num = None
+        try:
+            seat_num = int(float(str(seat_val))) if seat_val not in (None, '') else None
+        except (ValueError, TypeError):
+            seat_num = None
+
+        seats.append({
+            'guest_id': g['id'],
+            'name': g['name'],
+            'surname': g['surname'],
+            'second_name': g['second_name'] or '',
+            'row': row_num,
+            'seat': seat_num,
+            'checked_in': bool(g['checked_in']),
+            'left': g['seat_left'],
+            'top': g['seat_top'],
+        })
+
+    return jsonify({
+        'event_id': event_id,
+        'seats': seats,
+        'total': len(seats),
+    })
+
+
+@app.route('/api/event/<int:event_id>/seats/save', methods=['POST'])
+@login_required
+def api_save_seats(event_id):
+    """Persist positions for every seat the client sends. Save button triggers this."""
+    if current_user.role not in ['manager', 'admin']:
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+
+    data = request.get_json() or {}
+    positions = data.get('positions', [])
+    if not isinstance(positions, list):
+        return jsonify({'success': False, 'message': 'positions must be a list'}), 400
+
+    db = get_db()
+    try:
+        for p in positions:
+            guest_id = p.get('guest_id')
+            left = p.get('left')
+            top = p.get('top')
+            if guest_id is None or left is None or top is None:
+                continue
+            db.execute(
+                'UPDATE guests SET seat_left = ?, seat_top = ? WHERE id = ? AND event_id = ?',
+                (float(left), float(top), guest_id, event_id)
+            )
+        db.commit()
+        return jsonify({'success': True, 'saved': len(positions)})
+    except Exception as e:
+        db.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
 
 if __name__ == '__main__':
     init_db()
