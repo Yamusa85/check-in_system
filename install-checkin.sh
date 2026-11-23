@@ -97,6 +97,7 @@ REQUIRED_FILES=(
   "templates/event_select.html"
   "templates/guest_search.html"
   "templates/login.html"
+  "templates/seating_map.html"
 )
 missing=()
 for f in "${REQUIRED_FILES[@]}"; do
