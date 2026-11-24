@@ -1,35 +1,31 @@
 # check-in_system
-Python web check-in system for mini conventions  (Disclaimer: created with the help of AI agent)
+Веб-система регистрации участников мероприятия, написано на Python (предупреждение: создано с помощью ИИ агента Deepseek)
 
-:warning:ATTENTION:warning: Not for online use, use in local network only! 
+:warning:ВНИМАНИЕ:warning: Не для размещения в глобальной сети, используйте только в вашей локальной сети!
 
-Admin interface:
+Интерфейс Админа (создание мероприятий, загрузка таблицы списка участников):
 <img width="2302" height="993" alt="image" src="https://github.com/user-attachments/assets/67f66ce9-3ea8-4662-9f52-eb3bc54e27e0" />
 
-Manager interface:
+Интерфейс менеджера (непосредственно процесс отметки посещения мероприятия участником):
 <img width="3767" height="1764" alt="Screenshot 2026-11-22 101836" src="https://github.com/user-attachments/assets/7b5d2845-1969-47aa-b1fe-977d2cfd3584" />
 
-Seats map page:
+Страница карты рассадки (количество рядов и мест высчитывается из столбца Ряд и Место вашей таблицы):
 <img width="1893" height="874" alt="image" src="https://github.com/user-attachments/assets/bb4b90ff-db35-4205-8f80-7bc5328d0541" />
 
+Простая и функциональная веб-система для персонала отметки пришедших гостей на ваше мерпориятие.
 
+Сервис доступен по адресу http://адрессервера:5000
 
+Логины и пароли по умолчанию: admin/admin123, manager/manager123  (можно изменить в app.py)
 
-Simple and quite functional web system for receptionists at your mini conventions to check-in your guests.
-May be used online or in your local network.
+Функционал:
+1) импорт списка приглашенных из файла эксель
+2) 2 обязательных столбца (фамилия и имя) и неограниченное количество дополнительных столбцов
+3) 2 уровня доступа: admin и manager
+4) простой и интутивный интерфейс
+5) менеджеры могут фильтровать, сортировать, редактировать записи, выгружать статистику
 
-Site available at http://serveraddress:5000
-
-Default logopasses: admin/admin123, manager/manager123  (may be changed in app.py)
-
-Functionality:
-1) import guests list from excel file
-2) 2 necessary and unlimited optional columns for your data
-3) 2 accounts: admin and manager
-4) simple and intuitive interface
-5) managers have options to export results, filter current list of guests, edit guests data on the go
-
-Requirements (linux):
+Требования:
 1) sqlite3
 2) python3
 3) python3-flask
@@ -38,7 +34,7 @@ Requirements (linux):
 6) python3-pandas
 7) python3-openpyxl
 
-for Ubuntu install
+Простой скрипт установки (устанавливает требуемые модули и прописывает автозапуск приложения в систему (на примере Ubuntu)):
 
 ```copy
 curl -O https://raw.githubusercontent.com/Yamusa85/check-in_system/refs/heads/main/install-checkin.sh
@@ -47,8 +43,7 @@ curl -O https://raw.githubusercontent.com/Yamusa85/check-in_system/refs/heads/ma
 bash install-checkin.sh
 ```
 
-Optional:
-1) NGINX with LE-cert and proxying
-2) add app.py into systemd launch
+Опционально (если требуется https:443):
+1) NGINX с LE-cert и проксирование
 
-Place "checkin-system" folder and its contents in home dir or anywhere, start app.py
+Если устанавливаете без скрипта, положите папку "checkin-system" в желаемую папку и вызовите запуск "python3 app.py"
