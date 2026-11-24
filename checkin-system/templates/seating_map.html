@@ -108,65 +108,88 @@ const STAGE = document.getElementById('stage');
 const STATUS = document.getElementById('status');
 
 let seats = [];          // current data from server
+let maxRow = 15;         // grid extents from server
+let maxSeat = 40;
 let dragged = null;
 let offsetX = 0, offsetY = 0;
-let dirty = false;       // unsaved position changes
+let dirty = false;
+
+const SEAT_W = 56, SEAT_H = 56;
+const CELL_W = 60, CELL_H = 60;
+const PAD_X = 20, PAD_Y = 20;
+const SPECIAL_STRIP_H = 90;   // vertical space above the numeric grid
+const SPECIAL_STEP_X = 70;    // horizontal step inside the special strip
 
 function setStatus(text) { STATUS.textContent = text; }
 
 async function loadSeats() {
   setStatus('loading…');
-  const res = await fetch(`/api/event/${EVENT_ID}/seats`);
-  const data = await res.json();
-  seats = data.seats;
-  dirty = false;
-  render();
-  setStatus(`✅ загружено ${seats.length} мест`);
+  try {
+    const res = await fetch(`/api/event/${EVENT_ID}/seats`);
+    const data = await res.json();
+    seats = data.seats;
+    maxRow = data.max_row || 15;
+    maxSeat = data.max_seat || 40;
+    dirty = false;
+    render();
+    setStatus(`✅ загружено ${seats.length} мест · ${maxRow} ряд. × до ${maxSeat}/ряд`);
+  } catch (err) {
+    setStatus('❌ ошибка загрузки: ' + err.message);
+  }
 }
 
 function render() {
   STAGE.innerHTML = '<div class="drag-hint">↕️ скрол · тащите места</div>';
 
-  // If some seats have no saved position, lay them out on a grid (fallback).
-  // Preferred initial layout uses the Ряд / Место values from Excel.
-  const cellW = 60, cellH = 60, padX = 20, padY = 20;
-
-  // Determine grid extents from row/seat numbers, fallback 15x40
-  let maxRow = 15, maxSeat = 40;
-  seats.forEach(s => {
-    if (s.row && s.row > maxRow) maxRow = s.row;
-    if (s.seat && s.seat > maxSeat) maxSeat = s.seat;
-  });
+  // Special seats (Сцена / Президиум / NAS) are placed in a strip at the top,
+  // left-to-right, so they don't collide with the numeric grid.
+  let specialIndex = 0;
 
   seats.forEach(s => {
     const el = document.createElement('div');
     el.className = 'seat' + (s.checked_in ? ' taken' : '');
     el.dataset.guestId = s.guest_id;
 
-    const rowLabel = s.row != null ? s.row : '?';
-    const seatLabel = s.seat != null ? s.seat : '?';
-    const shortName = (s.surname || '').slice(0, 8) || '—';
+    // ----- label -----
+    let labelLine1;
+    if (s.special_label) {
+      labelLine1 = s.special_label;             // 'Сцена' | 'Президиум' | 'NAS'
+    } else if (s.row != null && s.seat != null) {
+      labelLine1 = `R${s.row}·S${s.seat}`;
+    } else if (s.row != null) {
+      labelLine1 = `R${s.row}·?`;
+    } else {
+      labelLine1 = 'NAS';
+    }
 
+    const shortName = (s.surname || '').slice(0, 8) || '—';
     el.innerHTML =
-      `<div>R${rowLabel}·S${seatLabel}</div>` +
+      `<div>${labelLine1}</div>` +
       `<div class="r-s">${s.checked_in ? '✓ зареган' : 'пусто'}</div>` +
       `<div class="who">${shortName}</div>`;
 
-    // Determine position
+    // ----- position -----
     let left, top;
     if (s.left != null && s.top != null) {
+      // Saved position wins
       left = s.left;
       top  = s.top;
+    } else if (s.special_label) {
+      // Default: top strip
+      left = PAD_X + specialIndex * SPECIAL_STEP_X;
+      top  = PAD_Y;
+      specialIndex++;
     } else if (s.row != null && s.seat != null) {
-      // derive from Excel row/seat columns
-      left = padX + (s.seat - 1) * cellW;
-      top  = padY + (s.row  - 1) * cellH;
+      // Numeric grid, shifted down to make room for the special strip
+      left = PAD_X + (s.seat - 1) * CELL_W;
+      top  = PAD_Y + SPECIAL_STRIP_H + (s.row - 1) * CELL_H;
     } else {
-      // scattered fallback (shouldn't normally happen)
-      left = padX + (Math.random() * maxSeat) * cellW;
-      top  = padY + (Math.random() * maxRow)  * cellH;
+      // Shouldn't happen after backend parsing, but keep a fallback
+      left = PAD_X + Math.random() * maxSeat * CELL_W;
+      top  = PAD_Y + SPECIAL_STRIP_H + Math.random() * maxRow * CELL_H;
     }
-    s.left = left; s.top = top;
+    s.left = left;
+    s.top  = top;
 
     el.style.left = left + 'px';
     el.style.top  = top  + 'px';
@@ -177,14 +200,18 @@ function render() {
     STAGE.appendChild(el);
   });
 
-  // Expand stage to fit
-  let maxL = 0, maxT = 0;
+  // ----- stage size: derived from max_row / max_seat, plus any dragged-out seats -----
+  const gridWidth  = PAD_X + maxSeat * CELL_W + 80;
+  const gridHeight = PAD_Y + SPECIAL_STRIP_H + maxRow * CELL_H + 80;
+
+  let maxL = gridWidth, maxT = gridHeight;
   seats.forEach(s => {
-    if (s.left > maxL) maxL = s.left;
-    if (s.top  > maxT) maxT = s.top;
+    if (s.left + SEAT_W + 20 > maxL) maxL = s.left + SEAT_W + 20;
+    if (s.top  + SEAT_H + 20 > maxT) maxT = s.top  + SEAT_H + 20;
   });
-  STAGE.style.minWidth  = Math.max(maxL + 100, 800) + 'px';
-  STAGE.style.minHeight = Math.max(maxT + 100, 500) + 'px';
+
+  STAGE.style.minWidth  = Math.max(maxL, 800) + 'px';
+  STAGE.style.minHeight = Math.max(maxT, 500) + 'px';
 }
 
 function onDown(e) {
@@ -226,14 +253,12 @@ function onMove(e) {
   let newLeft = clientX - stageRect.left + STAGE.scrollLeft - offsetX;
   let newTop  = clientY - stageRect.top  + STAGE.scrollTop  - offsetY;
 
-  const w = 56, h = 56;
-  newLeft = Math.max(4, Math.min(newLeft, STAGE.scrollWidth  - w - 4));
-  newTop  = Math.max(4, Math.min(newTop,  STAGE.scrollHeight - h - 4));
+  newLeft = Math.max(4, Math.min(newLeft, STAGE.scrollWidth  - SEAT_W - 4));
+  newTop  = Math.max(4, Math.min(newTop,  STAGE.scrollHeight - SEAT_H - 4));
 
   dragged.el.style.left = newLeft + 'px';
   dragged.el.style.top  = newTop  + 'px';
 
-  // update our local record
   const rec = seats.find(s => s.guest_id === dragged.guestId);
   if (rec) { rec.left = newLeft; rec.top = newTop; }
   dirty = true;
@@ -251,7 +276,7 @@ function onUp() {
   window.removeEventListener('touchend', onUp);
   window.removeEventListener('touchcancel', onUp);
 
-  setStatus('⚠️ есть изменения - нажмите Сохранить');
+  setStatus('⚠️ есть изменения — нажмите Сохранить');
 }
 
 async function savePositions() {
@@ -288,12 +313,12 @@ document.getElementById('refreshBtn').addEventListener('click', () => {
   loadSeats();
 });
 
-// Warn on unload if dirty
 window.addEventListener('beforeunload', e => {
   if (dirty) { e.preventDefault(); e.returnValue = ''; }
 });
 
 loadSeats();
 </script>
+ 
 </body>
 </html>
