@@ -317,7 +317,40 @@ window.addEventListener('beforeunload', e => {
   if (dirty) { e.preventDefault(); e.returnValue = ''; }
 });
 
-loadSeats();
+// ---- live update: refresh check-in colours every 5 s ----
+let liveTimer = null;
+
+function startLiveUpdates() {
+  if (liveTimer) return;
+  liveTimer = setInterval(async () => {
+    if (dirty || document.hidden) return;
+    try {
+      const res = await fetch(`/api/event/${EVENT_ID}/seats`);
+      const data = await res.json();
+      data.seats.forEach(s => {
+        const el = document.querySelector(`.seat[data-guest-id="${s.guest_id}"]`);
+        if (!el) return;
+        el.classList.toggle('taken', s.checked_in);
+        const rs = el.querySelector('.r-s');
+        if (rs) rs.textContent = s.checked_in ? '✓ зареган' : 'пусто';
+        const rec = seats.find(r => r.guest_id === s.guest_id);
+        if (rec) rec.checked_in = s.checked_in;
+      });
+    } catch (_) {}
+  }, 5000);
+}
+
+function stopLiveUpdates() {
+  if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopLiveUpdates();
+  else startLiveUpdates();
+});
+
+loadSeats().then(startLiveUpdates);
+
 </script>
  
 </body>
