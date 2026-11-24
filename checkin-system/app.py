@@ -1126,7 +1126,17 @@ def update_guest(guest_id):
 
 # ============ SEATING MAP ============
 
-@app.route('/manager/event/<int:event_id>/seating')
+def _norm(value):
+    """Strip + lowercase for case-insensitive comparison."""
+    if value is None:
+        return ''
+    return str(value).strip().lower()
+
+
+SPECIAL_ROWS = {'сцена', 'президиум'}   # lower-case; matched case-insensitively
+
+
+@app.route('/manager/event/<int:event_id>/seating', endpoint='seating_map')
 @login_required
 def seating_map(event_id):
     if current_user.role not in ['manager', 'admin']:
@@ -1145,7 +1155,7 @@ def seating_map(event_id):
 @app.route('/api/event/<int:event_id>/seats')
 @login_required
 def api_get_seats(event_id):
-    """Return every guest with their assigned row/seat + position + checkin status."""
+    """Return every guest with row/seat, position, check-in status and grid size."""
     if current_user.role not in ['manager', 'admin']:
         return jsonify({'error': 'Access denied'}), 403
 
@@ -1161,6 +1171,9 @@ def api_get_seats(event_id):
     db.close()
 
     seats = []
+    max_row = 0
+    max_seat = 0
+
     for g in guests:
         additional = {}
         if g['additional_data']:
@@ -1169,20 +1182,50 @@ def api_get_seats(event_id):
             except Exception:
                 pass
 
-        # Pull Ряд / Место out of the additional_data JSON.
-        # Your importer stores every non-core column there, keys keep the
-        # original Excel header spelling.
-        row_val = additional.get('Ряд') or additional.get('ряд') or additional.get('Row')
-        seat_val = additional.get('Место') or additional.get('место') or additional.get('Seat')
+        # --- Case-insensitive lookup of Ряд / Место ---
+        row_raw = None
+        seat_raw = None
+        for k, v in additional.items():
+            nk = _norm(k)
+            if nk in ('ряд', 'row'):
+                row_raw = v
+            elif nk in ('место', 'seat'):
+                seat_raw = v
 
+        row_norm = _norm(row_raw)
+
+        special_label = None
+        row_num = None
+        seat_num = None
+
+        # 1) Special row? ("сцена" / "президиум")
+        if row_norm in SPECIAL_ROWS:
+            # nice capitalisation for display
+            special_label = 'Сцена' if row_norm == 'сцена' else 'Президиум'
+        else:
+            # 2) Numeric row?
+            try:
+                if row_raw is not None and str(row_raw).strip() != '':
+                    row_num = int(float(str(row_raw)))
+            except (ValueError, TypeError):
+                row_num = None
+
+        # Seat number — only meaningful when the row is numeric
         try:
-            row_num = int(float(str(row_val))) if row_val not in (None, '') else None
-        except (ValueError, TypeError):
-            row_num = None
-        try:
-            seat_num = int(float(str(seat_val))) if seat_val not in (None, '') else None
+            if seat_raw is not None and str(seat_raw).strip() != '':
+                seat_num = int(float(str(seat_raw)))
         except (ValueError, TypeError):
             seat_num = None
+
+        # 3) Nothing useful? → NAS
+        if special_label is None and row_num is None and seat_num is None:
+            special_label = 'NAS'
+
+        # Track grid extents (only numeric rows/seats count)
+        if row_num is not None and row_num > max_row:
+            max_row = row_num
+        if seat_num is not None and seat_num > max_seat:
+            max_seat = seat_num
 
         seats.append({
             'guest_id': g['id'],
@@ -1191,15 +1234,24 @@ def api_get_seats(event_id):
             'second_name': g['second_name'] or '',
             'row': row_num,
             'seat': seat_num,
+            'special_label': special_label,   # 'Сцена' | 'Президиум' | 'NAS' | None
             'checked_in': bool(g['checked_in']),
             'left': g['seat_left'],
             'top': g['seat_top'],
         })
 
+    # Sensible fallbacks if no numeric rows/seats were found
+    if max_row == 0:
+        max_row = 15
+    if max_seat == 0:
+        max_seat = 40
+
     return jsonify({
         'event_id': event_id,
         'seats': seats,
         'total': len(seats),
+        'max_row': max_row,
+        'max_seat': max_seat,
     })
 
 
@@ -1238,5 +1290,3 @@ def api_save_seats(event_id):
 if __name__ == '__main__':
     init_db()
     app.run(debug=True, host='0.0.0.0', port=5000)
-
-
